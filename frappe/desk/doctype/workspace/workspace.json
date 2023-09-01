@@ -136,7 +136,6 @@
    "fieldname": "title",
    "fieldtype": "Data",
    "label": "Title",
-   "read_only": 1,
    "reqd": 1
   },
   {
@@ -211,7 +210,7 @@
  ],
  "in_create": 1,
  "links": [],
- "modified": "2023-06-08 14:52:38.110224",
+ "modified": "2023-08-29 10:53:28.806152",
  "modified_by": "Administrator",
  "module": "Desk",
  "name": "Workspace",
