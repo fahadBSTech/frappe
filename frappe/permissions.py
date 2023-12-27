@@ -175,15 +175,17 @@ def get_doc_permissions(doc, user=None, ptype=None):
 		return {"read": 1, "write": 1}
 
 	meta = frappe.get_meta(doc.doctype)
-
 	def is_user_owner():
 		return (doc.get("owner") or "").lower() == user.lower()
-
+	permissions = copy.deepcopy(get_role_permissions(meta, user=user, is_owner=is_user_owner()))
 	if has_controller_permissions(doc, ptype, user=user) is False:
 		push_perm_check_log("Not allowed via controller permission check")
 		return {ptype: 0}
+	
+	if has_controller_permissions(doc, ptype, user=user) is True:
+		push_perm_check_log("allowed via controller permission check")
+		return permissions
 
-	permissions = copy.deepcopy(get_role_permissions(meta, user=user, is_owner=is_user_owner()))
 
 	if not cint(meta.is_submittable):
 		permissions["submit"] = 0
