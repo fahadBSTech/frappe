@@ -9,16 +9,16 @@ from rq.job import Job
 
 import frappe
 from frappe.core.doctype.rq_job.rq_job import RQJob, remove_failed_jobs, stop_job
+from frappe.installer import update_site_config
 from frappe.tests.utils import FrappeTestCase, timeout
 from frappe.utils import cstr, execute_in_shell
 from frappe.utils.background_jobs import is_job_enqueued
 
 
 class TestRQJob(FrappeTestCase):
-
 	BG_JOB = "frappe.core.doctype.rq_job.test_rq_job.test_func"
 
-	@timeout(seconds=20)
+	@timeout(seconds=60)
 	def check_status(self, job: Job, status, wait=True):
 		while wait:
 			if not (job.is_queued or job.is_started):
@@ -28,7 +28,6 @@ class TestRQJob(FrappeTestCase):
 		self.assertEqual(frappe.get_doc("RQ Job", job.id).status, status)
 
 	def test_serialization(self):
-
 		job = frappe.enqueue(method=self.BG_JOB, queue="short")
 		rq_job = frappe.get_doc("RQ Job", job.id)
 
@@ -56,8 +55,8 @@ class TestRQJob(FrappeTestCase):
 		rq_job = frappe.get_doc("RQ Job", job.id)
 		self.assertEqual(rq_job.job_name, "test_func")
 
+	@timeout
 	def test_get_list_filtering(self):
-
 		# Check failed job clearning and filtering
 		remove_failed_jobs()
 		jobs = RQJob.get_list({"filters": [["RQ Job", "status", "=", "failed"]]})
@@ -97,12 +96,21 @@ class TestRQJob(FrappeTestCase):
 		_, stderr = execute_in_shell("bench worker --queue short,default --burst", check_exit_code=True)
 		self.assertIn("quitting", cstr(stderr))
 
-	@timeout(20)
 	def test_job_id_dedup(self):
 		job_id = "test_dedup"
-		job = frappe.enqueue(self.BG_JOB, sleep=10, job_id=job_id)
+		job = frappe.enqueue(self.BG_JOB, sleep=5, job_id=job_id)
 		self.assertTrue(is_job_enqueued(job_id))
-		stop_job(job.id)
+		self.check_status(job, "finished")
+		self.assertFalse(is_job_enqueued(job_id))
+
+	@timeout(60)
+	def test_clear_failed_jobs(self):
+		limit = 10
+		update_site_config("rq_failed_jobs_limit", limit)
+
+		jobs = [frappe.enqueue(method=self.BG_JOB, queue="short", fail=True) for _ in range(limit * 2)]
+		self.check_status(jobs[-1], "failed")
+		self.assertLessEqual(RQJob.get_count({"filters": [["RQ Job", "status", "=", "failed"]]}), limit * 1.1)
 
 
 def test_func(fail=False, sleep=0):

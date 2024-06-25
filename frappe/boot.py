@@ -8,6 +8,7 @@ import frappe
 import frappe.defaults
 import frappe.desk.desk_page
 from frappe.core.doctype.navbar_settings.navbar_settings import get_app_logo, get_navbar_settings
+from frappe.desk.doctype.changelog_feed.changelog_feed import get_changelog_feed_items
 from frappe.desk.doctype.form_tour.form_tour import get_onboarding_ui_tours
 from frappe.desk.doctype.route_history.route_history import frequently_visited_links
 from frappe.desk.form.load import get_meta_bundle
@@ -45,7 +46,6 @@ def get_bootinfo():
 
 	if frappe.session["user"] != "Guest":
 		bootinfo.user_info = get_user_info()
-		bootinfo.sid = frappe.session["sid"]
 
 	bootinfo.modules = {}
 	bootinfo.module_list = []
@@ -106,13 +106,17 @@ def get_bootinfo():
 	bootinfo.link_title_doctypes = get_link_title_doctypes()
 	bootinfo.translated_doctypes = get_translated_doctypes()
 	bootinfo.subscription_conf = add_subscription_conf()
+	bootinfo.changelog_feed = get_changelog_feed_items()
 
 	return bootinfo
 
 
 def get_letter_heads():
 	letter_heads = {}
-	for letter_head in frappe.get_all("Letter Head", fields=["name", "content", "footer"]):
+
+	if not frappe.has_permission("Letter Head"):
+		return letter_heads
+	for letter_head in frappe.get_list("Letter Head", fields=["name", "content", "footer"]):
 		letter_heads.setdefault(
 			letter_head.name, {"header": letter_head.content, "footer": letter_head.footer}
 		)
@@ -121,12 +125,12 @@ def get_letter_heads():
 
 
 def load_conf_settings(bootinfo):
-	from frappe import conf
+	from frappe.core.api.file import get_max_file_size
 
-	bootinfo.max_file_size = conf.get("max_file_size") or 10485760
+	bootinfo.max_file_size = get_max_file_size()
 	for key in ("developer_mode", "socketio_port", "file_watcher_port"):
-		if key in conf:
-			bootinfo[key] = conf.get(key)
+		if key in frappe.conf:
+			bootinfo[key] = frappe.conf.get(key)
 
 
 def load_desktop_data(bootinfo):
@@ -177,9 +181,7 @@ def get_user_pages_or_reports(parent, cache=False):
 		frappe.qb.from_(customRole)
 		.from_(hasRole)
 		.from_(parentTable)
-		.select(
-			customRole[parent.lower()].as_("name"), customRole.modified, customRole.ref_doctype, *columns
-		)
+		.select(customRole[parent.lower()].as_("name"), customRole.modified, customRole.ref_doctype, *columns)
 		.where(
 			(hasRole.parent == customRole.name)
 			& (parentTable.name == customRole[parent.lower()])
@@ -202,9 +204,7 @@ def get_user_pages_or_reports(parent, cache=False):
 		.from_(parentTable)
 		.select(parentTable.name.as_("name"), parentTable.modified, *columns)
 		.where(
-			(hasRole.role.isin(roles))
-			& (hasRole.parent == parentTable.name)
-			& (parentTable.name.notin(subq))
+			(hasRole.role.isin(roles)) & (hasRole.parent == parentTable.name) & (parentTable.name.notin(subq))
 		)
 		.distinct()
 	)
@@ -226,7 +226,6 @@ def get_user_pages_or_reports(parent, cache=False):
 
 	# pages with no role are allowed
 	if parent == "Page":
-
 		pages_with_no_roles = (
 			frappe.qb.from_(parentTable)
 			.select(parentTable.name, parentTable.modified, *columns)

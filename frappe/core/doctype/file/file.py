@@ -61,6 +61,7 @@ class File(Document):
 		self.set_folder_name()
 		self.set_file_name()
 		self.validate_attachment_limit()
+		self.set_file_type()
 
 		if self.is_folder:
 			return
@@ -103,7 +104,7 @@ class File(Document):
 		if not self.attached_to_doctype:
 			return
 
-		if not self.attached_to_name or not isinstance(self.attached_to_name, (str, int)):
+		if not self.attached_to_name or not isinstance(self.attached_to_name, str | int):
 			frappe.throw(_("Attached To Name must be a string or an integer"), frappe.ValidationError)
 
 		if self.attached_to_field and SPECIAL_CHAR_PATTERN.search(self.attached_to_field):
@@ -291,6 +292,17 @@ class File(Document):
 
 		elif not self.is_home_folder:
 			self.folder = "Home"
+
+	def set_file_type(self):
+		if self.is_folder:
+			return
+
+		file_type = mimetypes.guess_type(self.file_name)[0]
+		if not file_type:
+			return
+
+		file_extension = mimetypes.guess_extension(file_type)
+		self.file_type = file_extension.lstrip(".").upper() if file_extension else None
 
 	def validate_file_on_disk(self):
 		"""Validates existence file"""
@@ -608,10 +620,10 @@ class File(Document):
 		file_size = len(self._content or b"")
 
 		if file_size > max_file_size:
-			frappe.throw(
-				_("File size exceeded the maximum allowed size of {0} MB").format(max_file_size / 1048576),
-				exc=MaxFileSizeReachedError,
-			)
+			msg = _("File size exceeded the maximum allowed size of {0} MB").format(max_file_size / 1048576)
+			if frappe.has_permission("System Settings", "write"):
+				msg += ".<br>" + _("You can increase the limit from System Settings.")
+			frappe.throw(msg, exc=MaxFileSizeReachedError)
 
 		return file_size
 
@@ -639,9 +651,7 @@ class File(Document):
 
 	def create_attachment_record(self):
 		icon = ' <i class="fa fa-lock text-warning"></i>' if self.is_private else ""
-		file_url = (
-			quote(frappe.safe_encode(self.file_url), safe="/:") if self.file_url else self.file_name
-		)
+		file_url = quote(frappe.safe_encode(self.file_url), safe="/:") if self.file_url else self.file_name
 		file_name = self.file_name or self.file_url
 
 		self.add_comment_in_reference_doc(
@@ -685,6 +695,16 @@ class File(Document):
 		self.save_file(content=optimized_content, overwrite=True)
 		self.save()
 
+	@property
+	def unique_url(self) -> str:
+		"""Unique URL contains file ID in URL to speed up permisison checks."""
+		from urllib.parse import urlencode
+
+		if self.is_private:
+			return self.file_url + "?" + urlencode({"fid": self.name})
+		else:
+			return self.file_url
+
 	@staticmethod
 	def zip_files(files):
 		zip_file = io.BytesIO()
@@ -710,17 +730,27 @@ def on_doctype_update():
 def has_permission(doc, ptype=None, user=None):
 	user = user or frappe.session.user
 
+	if user == "Administrator":
+		return True
+
 	if ptype == "create":
 		return frappe.has_permission("File", "create", user=user)
 
-	if not doc.is_private or (user != "Guest" and doc.owner == user) or user == "Administrator":
+	if not doc.is_private and ptype in ("read", "select"):
+		return True
+
+	if user != "Guest" and doc.owner == user:
 		return True
 
 	if doc.attached_to_doctype and doc.attached_to_name:
 		attached_to_doctype = doc.attached_to_doctype
 		attached_to_name = doc.attached_to_name
 
-		ref_doc = frappe.get_doc(attached_to_doctype, attached_to_name)
+		try:
+			ref_doc = frappe.get_doc(attached_to_doctype, attached_to_name)
+		except frappe.DoesNotExistError:
+			frappe.clear_last_message()
+			return False
 
 		if ptype in ["write", "create", "delete"]:
 			return ref_doc.has_permission("write")
@@ -730,15 +760,18 @@ def has_permission(doc, ptype=None, user=None):
 	return False
 
 
-def get_permission_query_conditions(user: str = None) -> str:
+def get_permission_query_conditions(user: str | None = None) -> str:
 	user = user or frappe.session.user
 	if user == "Administrator":
 		return ""
 
+	if frappe.get_cached_value("User", user, "user_type") != "System User":
+		return f""" `tabFile`.`owner` = {frappe.db.escape(user)} """
+
 	readable_doctypes = ", ".join(repr(dt) for dt in get_doctypes_with_read())
 	return f"""
 		(`tabFile`.`is_private` = 0)
-		OR (`tabFile`.`attached_to_doctype` IS NULL AND `tabFile`.`owner` = {user !r})
+		OR (`tabFile`.`attached_to_doctype` IS NULL AND `tabFile`.`owner` = {frappe.db.escape(user)})
 		OR (`tabFile`.`attached_to_doctype` IN ({readable_doctypes}))
 	"""
 

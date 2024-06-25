@@ -23,6 +23,7 @@ from frappe import _
 from frappe.core.doctype.comment.comment import update_comments_in_parent_after_request
 from frappe.middlewares import StaticDataMiddleware
 from frappe.utils import cint, get_site_name, sanitize_html
+from frappe.utils.data import escape_html
 from frappe.utils.error import make_error_snapshot
 from frappe.website.serve import get_response
 
@@ -47,7 +48,9 @@ class RequestContext:
 
 # If gc.freeze is done then importing modules before forking allows us to share the memory
 if frappe._tune_gc:
+	import babel.dates
 	import bleach
+	import num2words
 
 	import frappe.boot
 	import frappe.client
@@ -124,7 +127,7 @@ def application(request: Request):
 
 		try:
 			run_after_request_hooks(request, response)
-		except Exception as e:
+		except Exception:
 			# We can not handle exceptions safely here.
 			frappe.logger().error("Failed to run after request hook", exc_info=True)
 
@@ -162,9 +165,12 @@ def init_request(request):
 			raise frappe.SessionStopped("Session Stopped")
 	else:
 		frappe.connect(set_admin_as_user=False)
+	if request.path.startswith("/api/method/upload_file"):
+		from frappe.core.api.file import get_max_file_size
 
-	request.max_content_length = cint(frappe.local.conf.get("max_file_size")) or 10 * 1024 * 1024
-
+		request.max_content_length = get_max_file_size()
+	else:
+		request.max_content_length = cint(frappe.local.conf.get("max_file_size")) or 25 * 1024 * 1024
 	make_form_dict(request)
 
 	if request.method != "OPTIONS":
@@ -247,9 +253,7 @@ def set_cors_headers(response):
 
 	# only required for preflight requests
 	if request.method == "OPTIONS":
-		cors_headers["Access-Control-Allow-Methods"] = request.headers.get(
-			"Access-Control-Request-Method"
-		)
+		cors_headers["Access-Control-Allow-Methods"] = request.headers.get("Access-Control-Request-Method")
 
 		if allowed_headers := request.headers.get("Access-Control-Request-Headers"):
 			cors_headers["Access-Control-Allow-Headers"] = allowed_headers
@@ -261,11 +265,11 @@ def set_cors_headers(response):
 	response.headers.extend(cors_headers)
 
 
-def make_form_dict(request):
+def make_form_dict(request: Request):
 	import json
 
 	request_data = request.get_data(as_text=True)
-	if "application/json" in (request.content_type or "") and request_data:
+	if request_data and request.is_json:
 		args = json.loads(request_data)
 	else:
 		args = {}
@@ -277,9 +281,8 @@ def make_form_dict(request):
 
 	frappe.local.form_dict = frappe._dict(args)
 
-	if "_" in frappe.local.form_dict:
-		# _ is passed by $.ajax so that the request is not cached by the browser. So, remove _ from form_dict
-		frappe.local.form_dict.pop("_")
+	# _ is passed by $.ajax so that the request is not cached by the browser. So, remove _ from form_dict
+	frappe.local.form_dict.pop("_", None)
 
 
 def handle_exception(e):
@@ -345,7 +348,7 @@ def handle_exception(e):
 		response = frappe.rate_limiter.respond()
 
 	else:
-		traceback = "<pre>" + sanitize_html(frappe.get_traceback()) + "</pre>"
+		traceback = "<pre>" + escape_html(frappe.get_traceback()) + "</pre>"
 		# disable traceback in production if flag is set
 		if frappe.local.flags.disable_traceback and not frappe.local.dev_server:
 			traceback = ""
@@ -374,11 +377,7 @@ def handle_exception(e):
 
 def sync_database(rollback: bool) -> bool:
 	# if HTTP method would change server state, commit if necessary
-	if (
-		frappe.db
-		and (frappe.local.flags.commit or frappe.local.request.method in UNSAFE_HTTP_METHODS)
-		and frappe.db.transaction_writes
-	):
+	if frappe.db and (frappe.local.flags.commit or frappe.local.request.method in UNSAFE_HTTP_METHODS):
 		frappe.db.commit()
 		rollback = False
 	elif frappe.db:
@@ -396,9 +395,7 @@ def sync_database(rollback: bool) -> bool:
 	return rollback
 
 
-def serve(
-	port=8000, profile=False, no_reload=False, no_threading=False, site=None, sites_path="."
-):
+def serve(port=8000, profile=False, no_reload=False, no_threading=False, site=None, sites_path="."):
 	global application, _site, _sites_path
 	_site = site
 	_sites_path = sites_path
@@ -409,9 +406,7 @@ def serve(
 		application = ProfilerMiddleware(application, sort_by=("cumtime", "calls"))
 
 	if not os.environ.get("NO_STATICS"):
-		application = SharedDataMiddleware(
-			application, {"/assets": str(os.path.join(sites_path, "assets"))}
-		)
+		application = SharedDataMiddleware(application, {"/assets": str(os.path.join(sites_path, "assets"))})
 
 		application = StaticDataMiddleware(application, {"/files": str(os.path.abspath(sites_path))})
 

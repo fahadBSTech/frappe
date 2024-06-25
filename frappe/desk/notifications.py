@@ -131,7 +131,9 @@ def get_notifications_for_targets(config, notification_percent):
 					for doc in doc_list:
 						value = doc[value_field]
 						target = doc[target_field]
-						doc_target_percents[doctype][doc.name] = (value / target * 100) if value < target else 100
+						doc_target_percents[doctype][doc.name] = (
+							(value / target * 100) if value < target else 100
+						)
 
 	return doc_target_percents
 
@@ -244,7 +246,7 @@ def get_filters_for(doctype):
 
 @frappe.whitelist()
 @frappe.read_only()
-def get_open_count(doctype, name, items=None):
+def get_open_count(doctype: str, name: str, items=None):
 	"""Get count for internal and external links for given transactions
 
 	:param doctype: Reference DocType
@@ -274,7 +276,9 @@ def get_open_count(doctype, name, items=None):
 	}
 
 	for d in items:
-		internal_link_for_doctype = links.get("internal_links", {}).get(d)
+		internal_link_for_doctype = links.get("internal_links", {}).get(d) or links.get(
+			"internal_and_external_links", {}
+		).get(d)
 		if internal_link_for_doctype:
 			internal_links_data_for_d = get_internal_links(doc, internal_link_for_doctype, d)
 			if internal_links_data_for_d["count"]:
@@ -283,7 +287,7 @@ def get_open_count(doctype, name, items=None):
 				try:
 					external_links_data_for_d = get_external_links(d, name, links)
 					out["external_links_found"].append(external_links_data_for_d)
-				except Exception as e:
+				except Exception:
 					out["external_links_found"].append({"doctype": d, "open_count": 0, "count": 0})
 		else:
 			external_links_data_for_d = get_external_links(d, name, links)
@@ -313,7 +317,7 @@ def get_internal_links(doc, link, link_doctype):
 	elif isinstance(link, list):
 		# get internal links in child documents
 		table_fieldname, link_fieldname = link
-		for row in doc.get(table_fieldname):
+		for row in doc.get(table_fieldname) or []:
 			value = row.get(link_fieldname)
 			if value and value not in names:
 				names.append(value)

@@ -15,7 +15,7 @@ import operator
 import os
 import re
 from contextlib import contextmanager
-from csv import reader
+from csv import reader, writer
 
 from babel.messages.extract import extract_python
 from babel.messages.jslexer import Token, tokenize, unquote_string
@@ -59,7 +59,7 @@ MERGED_TRANSLATION_KEY = "merged_translations"
 USER_TRANSLATION_KEY = "lang_user_translations"
 
 
-def get_language(lang_list: list = None) -> str:
+def get_language(lang_list: list | None = None) -> str:
 	"""Set `frappe.local.lang` from HTTP headers at beginning of request
 
 	Order of priority for setting language:
@@ -90,7 +90,7 @@ def get_language(lang_list: list = None) -> str:
 		if preferred_language_cookie in lang_set:
 			return preferred_language_cookie
 
-		parent_language = get_parent_language(language)
+		parent_language = get_parent_language(preferred_language_cookie)
 		if parent_language in lang_set:
 			return parent_language
 
@@ -122,7 +122,7 @@ def get_parent_language(lang: str) -> str:
 		return lang[: lang.index("-")]
 
 
-def get_user_lang(user: str = None) -> str:
+def get_user_lang(user: str | None = None) -> str:
 	"""Set frappe.local.lang from user preferences on session beginning or resumption"""
 	user = user or frappe.session.user
 	lang = frappe.cache().hget("lang", user)
@@ -231,7 +231,7 @@ def get_dict_from_hooks(fortype, name):
 	translated_dict = {}
 
 	hooks = frappe.get_hooks("get_translated_dict")
-	for (hook_fortype, fortype_name) in hooks:
+	for hook_fortype, fortype_name in hooks:
 		if hook_fortype == fortype and fortype_name == name:
 			for method in hooks[(hook_fortype, fortype_name)]:
 				translated_dict.update(frappe.get_attr(method)())
@@ -333,9 +333,7 @@ def get_translation_dict_from_file(path, lang, app, throw=False) -> dict[str, st
 			elif len(item) in [2, 3]:
 				translation_map[item[0]] = strip(item[1])
 			elif item:
-				msg = "Bad translation in '{app}' for language '{lang}': {values}".format(
-					app=app, lang=lang, values=cstr(item)
-				)
+				msg = f"Bad translation in '{app}' for language '{lang}': {cstr(item)}"
 				frappe.log_error(message=msg, title="Error in translation file")
 				if throw:
 					frappe.throw(msg, title="Error in translation file")
@@ -460,7 +458,7 @@ def get_messages_from_doctype(name):
 
 		if d.fieldtype == "Select" and d.options:
 			options = d.options.split("\n")
-			if not "icon" in options[0]:
+			if "icon" not in options[0]:
 				messages.extend(options)
 		if d.fieldtype == "HTML" and d.options:
 			messages.append(d.options)
@@ -684,7 +682,7 @@ def get_all_messages_from_js_files(app_name=None):
 	messages = []
 	for app in [app_name] if app_name else frappe.get_installed_apps(_ensure_on_bench=True):
 		if os.path.exists(frappe.get_app_path(app, "public")):
-			for basepath, folders, files in os.walk(frappe.get_app_path(app, "public")):
+			for basepath, _folders, files in os.walk(frappe.get_app_path(app, "public")):
 				if "frappe/public/js/lib" in basepath:
 					continue
 
@@ -999,7 +997,6 @@ def write_csv_file(path, app_messages, lang_dict):
 	:param lang_dict: Full translated dict.
 	"""
 	app_messages.sort(key=lambda x: x[1])
-	from csv import writer
 
 	with open(path, "w", newline="") as msgfile:
 		w = writer(msgfile, lineterminator="\n")
@@ -1092,8 +1089,8 @@ def update_translations(lang, untranslated_file, translated_file, app="_ALL_APPS
 	for key, value in zip(
 		frappe.get_file_items(untranslated_file, ignore_empty_lines=False),
 		frappe.get_file_items(translated_file, ignore_empty_lines=False),
+		strict=False,
 	):
-
 		# undo hack in get_untranslated
 		translation_dict[restore_newlines(key)] = restore_newlines(value)
 
@@ -1120,6 +1117,50 @@ def import_translations(lang, path):
 		write_translations_file(app, lang, full_dict)
 
 
+def migrate_translations(source_app, target_app):
+	"""Migrate target-app-specific translations from source-app to target-app"""
+	clear_cache()
+	strings_in_source_app = [m[1] for m in frappe.translate.get_messages_for_app(source_app)]
+	strings_in_target_app = [m[1] for m in frappe.translate.get_messages_for_app(target_app)]
+
+	strings_in_target_app_but_not_in_source_app = list(
+		set(strings_in_target_app) - set(strings_in_source_app)
+	)
+
+	languages = frappe.translate.get_all_languages()
+
+	source_app_translations_dir = os.path.join(frappe.get_pymodule_path(source_app), "translations")
+	target_app_translations_dir = os.path.join(frappe.get_pymodule_path(target_app), "translations")
+
+	if not os.path.exists(target_app_translations_dir):
+		os.makedirs(target_app_translations_dir)
+
+	for lang in languages:
+		source_csv = os.path.join(source_app_translations_dir, lang + ".csv")
+
+		if not os.path.exists(source_csv):
+			continue
+
+		target_csv = os.path.join(target_app_translations_dir, lang + ".csv")
+		temp_csv = os.path.join(source_app_translations_dir, "_temp.csv")
+
+		with open(source_csv) as s, open(target_csv, "a+") as t, open(temp_csv, "a+") as temp:
+			source_reader = reader(s, lineterminator="\n")
+			target_writer = writer(t, lineterminator="\n")
+			temp_writer = writer(temp, lineterminator="\n")
+
+			for row in source_reader:
+				if row[0] in strings_in_target_app_but_not_in_source_app:
+					target_writer.writerow(row)
+				else:
+					temp_writer.writerow(row)
+
+		if not os.path.getsize(target_csv):
+			os.remove(target_csv)
+		os.remove(source_csv)
+		os.rename(temp_csv, source_csv)
+
+
 def rebuild_all_translation_files():
 	"""Rebuild all translation files: `[app]/translations/[lang].csv`."""
 	for lang in get_all_languages():
@@ -1143,9 +1184,7 @@ def write_translations_file(app, lang, full_dict=None, app_messages=None):
 
 	tpath = frappe.get_pymodule_path(app, "translations")
 	frappe.create_folder(tpath)
-	write_csv_file(
-		os.path.join(tpath, lang + ".csv"), app_messages, full_dict or get_all_translations(lang)
-	)
+	write_csv_file(os.path.join(tpath, lang + ".csv"), app_messages, full_dict or get_all_translations(lang))
 
 
 def send_translations(translation_dict):
@@ -1160,7 +1199,7 @@ def deduplicate_messages(messages):
 	ret = []
 	op = operator.itemgetter(1)
 	messages = sorted(messages, key=op)
-	for k, g in itertools.groupby(messages, op):
+	for _k, g in itertools.groupby(messages, op):
 		ret.append(next(g))
 	return ret
 
@@ -1227,26 +1266,6 @@ def get_translations(source_text):
 
 
 @frappe.whitelist()
-def get_messages(language, start=0, page_length=100, search_text=""):
-	from frappe.frappeclient import FrappeClient
-
-	translator = FrappeClient(get_translator_url())
-	translated_dict = translator.post_api(
-		"translator.api.get_strings_for_translation", params=locals()
-	)
-
-	return translated_dict
-
-
-@frappe.whitelist()
-def get_source_additional_info(source, language=""):
-	from frappe.frappeclient import FrappeClient
-
-	translator = FrappeClient(get_translator_url())
-	return translator.post_api("translator.api.get_source_additional_info", params=locals())
-
-
-@frappe.whitelist()
 def get_contributions(language):
 	return frappe.get_all(
 		"Translation",
@@ -1255,22 +1274,6 @@ def get_contributions(language):
 			"contributed": 1,
 		},
 	)
-
-
-@frappe.whitelist()
-def get_contribution_status(message_id):
-	from frappe.frappeclient import FrappeClient
-
-	doc = frappe.get_doc("Translation", message_id)
-	translator = FrappeClient(get_translator_url())
-	contributed_translation = translator.get_api(
-		"translator.api.get_contribution_status", params={"translation_id": doc.contribution_docname}
-	)
-	return contributed_translation
-
-
-def get_translator_url():
-	return frappe.get_hooks()["translator_url"][0]
 
 
 @frappe.whitelist(allow_guest=True)
@@ -1312,7 +1315,7 @@ def print_language(language: str):
 
 	```
 	with print_language("de"):
-	    html = frappe.get_print( ... )
+	    html = frappe.get_print(...)
 	```
 	"""
 	if not language or language == frappe.local.lang:

@@ -15,7 +15,7 @@ def validate_receiver_nos(receiver_list):
 	validated_receiver_list = []
 	for d in receiver_list:
 		if not d:
-			break
+			continue
 
 		# remove invalid character
 		for x in [" ", "-", "(", ")"]:
@@ -47,7 +47,6 @@ def get_contact_number(contact_name, ref_doctype, ref_name):
 
 @frappe.whitelist()
 def send_sms(receiver_list, msg, sender_name="", success_msg=True):
-
 	import json
 
 	if isinstance(receiver_list, str):

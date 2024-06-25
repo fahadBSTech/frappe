@@ -64,7 +64,6 @@ def search_widget(
 	reference_doctype=None,
 	ignore_user_permissions=False,
 ):
-
 	start = cint(start)
 
 	if isinstance(filters, str):
@@ -109,7 +108,17 @@ def search_widget(
 	elif not query and doctype in standard_queries:
 		# from standard queries
 		search_widget(
-			doctype, txt, standard_queries[doctype][0], searchfield, start, page_length, filters
+			doctype=doctype,
+			txt=txt,
+			query=standard_queries[doctype][0],
+			searchfield=searchfield,
+			start=start,
+			page_length=page_length,
+			filters=filters,
+			filter_fields=filter_fields,
+			as_dict=as_dict,
+			reference_doctype=reference_doctype,
+			ignore_user_permissions=ignore_user_permissions,
 		)
 	else:
 		meta = frappe.get_meta(doctype)
@@ -123,7 +132,7 @@ def search_widget(
 				filters_items = filters.items()
 				filters = []
 				for f in filters_items:
-					if isinstance(f[1], (list, tuple)):
+					if isinstance(f[1], list | tuple):
 						filters.append([doctype, f[0], f[1][0], f[1][1]])
 					else:
 						filters.append([doctype, f[0], "=", f[1]])
@@ -170,7 +179,7 @@ def search_widget(
 			formatted_fields = [f"`tab{meta.name}`.`{f.strip()}`" for f in fields]
 
 			# Insert title field query after name
-			if meta.show_title_field_in_link:
+			if meta.show_title_field_in_link and meta.title_field:
 				formatted_fields.insert(1, f"`tab{meta.name}`.{meta.title_field} as `label`")
 
 			# In order_by, `idx` gets second priority, because it stores link count
@@ -178,16 +187,18 @@ def search_widget(
 
 			order_by_based_on_meta = get_order_by(doctype, meta)
 			# 2 is the index of _relevance column
-			order_by = f"{order_by_based_on_meta}, `tab{doctype}`.idx desc"
+			order_by = f"`tab{doctype}`.idx desc, {order_by_based_on_meta}"
 
 			if not meta.translated_doctype:
-				formatted_fields.append(
-					"""locate({_txt}, `tab{doctype}`.`name`) as `_relevance`""".format(
-						_txt=frappe.db.escape((txt or "").replace("%", "").replace("@", "")),
-						doctype=doctype,
-					)
-				)
-				order_by = f"_relevance, {order_by}"
+				_txt = frappe.db.escape((txt or "").replace("%", "").replace("@", ""))
+				_relevance = f"(1 / nullif(locate({_txt}, `tab{doctype}`.`name`), 0))"
+				formatted_fields.append(f"""{_relevance} as `_relevance`""")
+				# Since we are sorting by alias postgres needs to know number of column we are sorting
+				if frappe.db.db_type == "mariadb":
+					order_by = f"ifnull(_relevance, -9999) desc, {order_by}"
+				elif frappe.db.db_type == "postgres":
+					# Since we are sorting by alias postgres needs to know number of column we are sorting
+					order_by = f"{len(formatted_fields)} desc nulls last, {order_by}"
 
 			ignore_permissions = (
 				True
@@ -197,6 +208,7 @@ def search_widget(
 					and has_permission(
 						doctype,
 						ptype="select" if frappe.only_has_select_perm(doctype) else "read",
+						parent_doctype=reference_doctype,
 					)
 				)
 			)
@@ -271,6 +283,8 @@ def build_for_autosuggest(res: list[tuple], doctype: str) -> list[dict]:
 	if meta.show_title_field_in_link:
 		for item in res:
 			item = list(item)
+			if len(item) == 1:
+				item = [item[0], item[0]]
 			label = item[1]  # use title as label
 			item[1] = item[0]  # show name in description instead of title
 			if len(item) >= 3 and item[2] == label:
@@ -329,9 +343,7 @@ def get_users_for_mentions():
 
 
 def get_user_groups():
-	return frappe.get_all(
-		"User Group", fields=["name as id", "name as value"], update={"is_group": True}
-	)
+	return frappe.get_all("User Group", fields=["name as id", "name as value"], update={"is_group": True})
 
 
 @frappe.whitelist()

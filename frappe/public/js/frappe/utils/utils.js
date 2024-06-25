@@ -253,12 +253,11 @@ Object.assign(frappe.utils, {
 			">": "&gt;",
 			'"': "&quot;",
 			"'": "&#39;",
-			"/": "&#x2F;",
 			"`": "&#x60;",
 			"=": "&#x3D;",
 		};
 
-		return String(txt).replace(/[&<>"'`=/]/g, (char) => escape_html_mapping[char] || char);
+		return String(txt).replace(/[&<>"'`=]/g, (char) => escape_html_mapping[char] || char);
 	},
 
 	unescape_html: function (txt) {
@@ -268,13 +267,12 @@ Object.assign(frappe.utils, {
 			"&gt;": ">",
 			"&quot;": '"',
 			"&#39;": "'",
-			"&#x2F;": "/",
 			"&#x60;": "`",
 			"&#x3D;": "=",
 		};
 
 		return String(txt).replace(
-			/&amp;|&lt;|&gt;|&quot;|&#39;|&#x2F;|&#x60;|&#x3D;/g,
+			/&amp;|&lt;|&gt;|&quot;|&#39;|&#x60;|&#x3D;/g,
 			(char) => unescape_html_mapping[char] || char
 		);
 	},
@@ -1194,6 +1192,8 @@ Object.assign(frappe.utils, {
 	get_number_system: function (country) {
 		if (["Bangladesh", "India", "Myanmar", "Pakistan"].includes(country)) {
 			return number_systems.indian;
+		} else if (country == "Nepal") {
+			return number_systems.nepalese;
 		} else {
 			return number_systems.default;
 		}
@@ -1207,6 +1207,7 @@ Object.assign(frappe.utils, {
 			attribution:
 				'&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
 		},
+		image_path: "/assets/frappe/images/leaflet/",
 	},
 
 	icon(icon_name, size = "sm", icon_class = "", icon_style = "", svg_class = "") {
@@ -1346,10 +1347,19 @@ Object.assign(frappe.utils, {
 
 		// return number if total digits is lesser than min_length
 		const len = String(number).match(/\d/g).length;
-		if (len < min_length) return number.toString();
+		if (len < min_length) {
+			return number.toString();
+		}
 
 		const number_system = this.get_number_system(country);
 		let x = Math.abs(Math.round(number));
+
+		// if rounding was sufficient to get below min_length, return the rounded number
+		const x_string = x.toString();
+		if (x_string.length < min_length) {
+			return x_string;
+		}
+
 		for (const map of number_system) {
 			if (x >= map.divisor) {
 				let result = number / map.divisor;
@@ -1553,6 +1563,9 @@ Object.assign(frappe.utils, {
 	},
 
 	fetch_link_title(doctype, name) {
+		if (!doctype || !name) {
+			return;
+		}
 		try {
 			return frappe
 				.xcall("frappe.desk.search.get_link_title", {
@@ -1606,7 +1619,6 @@ Object.assign(frappe.utils, {
 	get_filter_as_json(filters) {
 		// convert filter array to json
 		let filter = null;
-
 		if (filters.length) {
 			filter = {};
 			filters.forEach((arr) => {
@@ -1614,8 +1626,11 @@ Object.assign(frappe.utils, {
 			});
 			filter = JSON.stringify(filter);
 		}
-
 		return filter;
+	},
+
+	process_filter_expression(filter) {
+		return new Function(`return ${filter}`)();
 	},
 
 	get_filter_from_json(filter_json, doctype) {
@@ -1625,12 +1640,22 @@ Object.assign(frappe.utils, {
 				return [];
 			}
 
-			const filters_json = new Function(`return ${filter_json}`)();
+			const filters_json = this.process_filter_expression(filter_json);
 			if (!doctype) {
 				// e.g. return {
 				//    priority: (2) ['=', 'Medium'],
 				//    status: (2) ['=', 'Open']
 				// }
+
+				// don't remove unless patch is created to convert all existing filters from object to array
+				// backward compatibility
+				if (Array.isArray(filters_json)) {
+					let filter = {};
+					filters_json.forEach((arr) => {
+						filter[arr[1]] = [arr[2], arr[3]];
+					});
+					return filter || [];
+				}
 				return filters_json || [];
 			}
 
@@ -1638,6 +1663,11 @@ Object.assign(frappe.utils, {
 			//    ['ToDo', 'status', '=', 'Open', false],
 			//    ['ToDo', 'priority', '=', 'Medium', false]
 			// ]
+			if (Array.isArray(filters_json)) {
+				return filters_json;
+			}
+			// don't remove unless patch is created to convert all existing filters from object to array
+			// backward compatibility
 			return Object.keys(filters_json).map((filter) => {
 				let val = filters_json[filter];
 				return [doctype, filter, val[0], val[1], false];

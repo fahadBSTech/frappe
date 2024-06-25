@@ -8,6 +8,7 @@ import json
 import os
 import shlex
 import subprocess
+import types
 import unittest
 from contextlib import contextmanager
 from functools import wraps
@@ -427,9 +428,7 @@ class TestCommands(BaseTestCommands):
 		self.assertEqual(check_password("Administrator", original_password), "Administrator")
 
 	@skipIf(
-		not (
-			frappe.conf.root_password and frappe.conf.admin_password and frappe.conf.db_type == "mariadb"
-		),
+		not (frappe.conf.root_password and frappe.conf.admin_password and frappe.conf.db_type == "mariadb"),
 		"DB Root password and Admin password not set in config",
 	)
 	def test_bench_drop_site_should_archive_site(self):
@@ -454,9 +453,7 @@ class TestCommands(BaseTestCommands):
 		self.assertTrue(os.path.exists(archive_directory))
 
 	@skipIf(
-		not (
-			frappe.conf.root_password and frappe.conf.admin_password and frappe.conf.db_type == "mariadb"
-		),
+		not (frappe.conf.root_password and frappe.conf.admin_password and frappe.conf.db_type == "mariadb"),
 		"DB Root password and Admin password not set in config",
 	)
 	def test_force_install_app(self):
@@ -493,15 +490,17 @@ class TestCommands(BaseTestCommands):
 
 
 class TestBackups(BaseTestCommands):
-	backup_map = {
-		"includes": {
-			"includes": [
-				"ToDo",
-				"Note",
-			]
-		},
-		"excludes": {"excludes": ["Activity Log", "Access Log", "Error Log"]},
-	}
+	backup_map = types.MappingProxyType(
+		{
+			"includes": {
+				"includes": [
+					"ToDo",
+					"Note",
+				]
+			},
+			"excludes": {"excludes": ["Activity Log", "Access Log", "Error Log"]},
+		}
+	)
 	home = os.path.expanduser("~")
 	site_backup_path = frappe.utils.get_site_path("private", "backups")
 
@@ -573,9 +572,7 @@ class TestBackups(BaseTestCommands):
 	def test_backup_with_custom_path(self):
 		"""Backup to a custom path (--backup-path)"""
 		backup_path = os.path.join(self.home, "backups")
-		self.execute(
-			"bench --site {site} backup --backup-path {backup_path}", {"backup_path": backup_path}
-		)
+		self.execute("bench --site {site} backup --backup-path {backup_path}", {"backup_path": backup_path})
 
 		self.assertEqual(self.returncode, 0)
 		self.assertTrue(os.path.exists(backup_path))
@@ -690,7 +687,12 @@ class TestRemoveApp(FrappeTestCase):
 				"module": "RemoveThis",
 				"custom": 1,
 				"fields": [
-					{"label": "Modulen't", "fieldname": "notmodule", "fieldtype": "Link", "options": "Module Def"}
+					{
+						"label": "Modulen't",
+						"fieldname": "notmodule",
+						"fieldtype": "Link",
+						"options": "Module Def",
+					}
 				],
 			}
 		).insert()
@@ -759,6 +761,26 @@ class TestBenchBuild(BaseTestCommands):
 			CURRENT_SIZE * (1 + JS_ASSET_THRESHOLD),
 			f"Default JS bundle size increased by {JS_ASSET_THRESHOLD:.2%} or more",
 		)
+
+
+class TestDBUtils(BaseTestCommands):
+	def test_db_add_index(self):
+		field = "reset_password_key"
+		self.execute("bench --site {site} add-database-index --doctype User --column " + field, {})
+		frappe.db.rollback()
+		index_name = frappe.db.get_index_name((field,))
+		self.assertTrue(frappe.db.has_index("tabUser", index_name))
+		meta = frappe.get_meta("User", cached=False)
+		self.assertTrue(meta.get_field(field).search_index)
+
+	@run_only_if(db_type_is.MARIADB)
+	def test_describe_table(self):
+		self.execute("bench --site {site} describe-database-table --doctype User", {})
+		self.assertIn("user_type", self.stdout)
+
+		# Ensure that output is machine parseable
+		stats = json.loads(self.stdout)
+		self.assertIn("total_rows", stats)
 
 
 class TestCommandUtils(FrappeTestCase):

@@ -5,6 +5,7 @@ import json
 
 import frappe
 from frappe.geo.country_info import get_country_info
+from frappe.permissions import AUTOMATIC_ROLES
 from frappe.translate import get_messages_for_boot, send_translations, set_default_language
 from frappe.utils import cint, strip
 from frappe.utils.password import update_password
@@ -13,7 +14,6 @@ from . import install_fixtures
 
 
 def get_setup_stages(args):
-
 	# App setup stage functions should not include frappe.db.commit
 	# That is done by frappe after successful completion of all stages
 	stages = [
@@ -33,9 +33,7 @@ def get_setup_stages(args):
 			# post executing hooks
 			"status": "Wrapping up",
 			"fail_msg": "Failed to complete setup",
-			"tasks": [
-				{"fn": run_post_setup_complete, "args": args, "fail_msg": "Failed to complete setup"}
-			],
+			"tasks": [{"fn": run_post_setup_complete, "args": args, "fail_msg": "Failed to complete setup"}],
 		}
 	)
 
@@ -257,13 +255,11 @@ def add_all_roles_to(name):
 	user = frappe.get_doc("User", name)
 	for role in frappe.db.sql("""select name from tabRole"""):
 		if role[0] not in [
-			"Administrator",
-			"Guest",
-			"All",
 			"Customer",
 			"Supplier",
 			"Partner",
 			"Employee",
+			*AUTOMATIC_ROLES,
 		]:
 			d = user.append("roles")
 			d.role = role[0]

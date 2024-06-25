@@ -13,7 +13,7 @@ from PIL import Image
 
 import frappe
 from frappe import _, safe_decode
-from frappe.utils import cstr, encode, get_files_path, random_string, strip
+from frappe.utils import cint, cstr, encode, get_files_path, random_string, strip
 from frappe.utils.file_manager import safe_b64decode
 from frappe.utils.image import optimize_image
 
@@ -165,7 +165,7 @@ def delete_file(path: str) -> None:
 			os.remove(path)
 
 
-def remove_file_by_url(file_url: str, doctype: str = None, name: str = None) -> "Document":
+def remove_file_by_url(file_url: str, doctype: str | None = None, name: str | None = None) -> "Document":
 	if doctype and name:
 		fid = frappe.db.get_value(
 			"File", {"file_url": file_url, "attached_to_doctype": doctype, "attached_to_name": name}
@@ -214,7 +214,7 @@ def get_file_name(fname: str, optional_suffix: str | None = None) -> str:
 
 def extract_images_from_doc(doc: "Document", fieldname: str):
 	content = doc.get(fieldname)
-	content = extract_images_from_html(doc, content)
+	content = extract_images_from_html(doc, content, is_private=(not doc.meta.make_attachments_public))
 	if frappe.flags.has_dataurl:
 		doc.set(fieldname, content)
 
@@ -261,7 +261,7 @@ def extract_images_from_html(doc: "Document", content: str, is_private: bool = F
 			}
 		)
 		_file.save(ignore_permissions=True)
-		file_url = _file.file_url
+		file_url = _file.unique_url
 		frappe.flags.has_dataurl = True
 
 		return f'<img src="{file_url}"'
@@ -272,7 +272,7 @@ def extract_images_from_html(doc: "Document", content: str, is_private: bool = F
 	return content
 
 
-def get_random_filename(content_type: str = None) -> str:
+def get_random_filename(content_type: str | None = None) -> str:
 	extn = None
 	if content_type:
 		extn = mimetypes.guess_extension(content_type)
@@ -306,7 +306,7 @@ def attach_files_to_document(doc: "Document", event) -> None:
 		# we dont want the update to fail if file cannot be attached for some reason
 		value = doc.get(df.fieldname)
 		if not (value or "").startswith(("/files", "/private/files")):
-			return
+			continue
 
 		if frappe.db.exists(
 			"File",
@@ -317,7 +317,7 @@ def attach_files_to_document(doc: "Document", event) -> None:
 				"attached_to_field": df.fieldname,
 			},
 		):
-			return
+			continue
 
 		unattached_file = frappe.db.exists(
 			"File",
@@ -337,9 +337,10 @@ def attach_files_to_document(doc: "Document", event) -> None:
 					"attached_to_name": doc.name,
 					"attached_to_doctype": doc.doctype,
 					"attached_to_field": df.fieldname,
+					"is_private": cint(value.startswith("/private")),
 				},
 			)
-			return
+			continue
 
 		file: "File" = frappe.get_doc(
 			doctype="File",
@@ -355,9 +356,70 @@ def attach_files_to_document(doc: "Document", event) -> None:
 			doc.log_error("Error Attaching File")
 
 
+def relink_files(doc, fieldname, temp_doc_name):
+	if not temp_doc_name:
+		return
+	from frappe.utils.data import add_to_date, now_datetime
+
+	"""
+	Relink files attached to incorrect document name to the new document name
+	by check if file with temp name exists that was created in last 60 minutes
+	"""
+	mislinked_file = frappe.db.exists(
+		"File",
+		{
+			"file_url": doc.get(fieldname),
+			"attached_to_name": temp_doc_name,
+			"attached_to_doctype": doc.doctype,
+			"attached_to_field": fieldname,
+			"creation": (
+				"between",
+				[add_to_date(date=now_datetime(), minutes=-60), now_datetime()],
+			),
+		},
+	)
+	"""If file exists, attach it to the new docname"""
+	if mislinked_file:
+		frappe.db.set_value(
+			"File",
+			mislinked_file,
+			field={
+				"attached_to_name": doc.name,
+			},
+		)
+		return
+
+
+def relink_mismatched_files(doc: "Document") -> None:
+	if not doc.get("__temporary_name", None):
+		return
+	attach_fields = doc.meta.get("fields", {"fieldtype": ["in", ["Attach", "Attach Image"]]})
+	for df in attach_fields:
+		if doc.get(df.fieldname):
+			relink_files(doc, df.fieldname, doc.__temporary_name)
+	# delete temporary name after relinking is done
+	doc.delete_key("__temporary_name")
+
+
 def decode_file_content(content: bytes) -> bytes:
 	if isinstance(content, str):
 		content = content.encode("utf-8")
 	if b"," in content:
 		content = content.split(b",")[1]
 	return safe_b64decode(content)
+
+
+def find_file_by_url(path: str, name: str | None = None) -> Optional["File"]:
+	filters = {"file_url": str(path)}
+	if name:
+		filters["name"] = str(name)
+
+	files = frappe.get_all("File", filters=filters, fields="*")
+
+	# this file might be attached to multiple documents
+	# if the file is accessible from any one of those documents
+	# then it should be downloadable
+	for file_data in files:
+		file: "File" = frappe.get_doc(doctype="File", **file_data)
+		if file.is_downloadable():
+			return file

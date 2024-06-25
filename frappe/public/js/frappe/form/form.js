@@ -1222,6 +1222,15 @@ frappe.ui.form.Form = class FrappeForm {
 	// ACTIONS
 
 	print_doc() {
+		if (this.is_dirty()) {
+			frappe.toast({
+				message: __(
+					"This document has unsaved changes which might not appear in final PDF. <br> Consider saving the document before printing."
+				),
+				indicator: "yellow",
+			});
+		}
+
 		frappe.route_options = {
 			frm: this,
 		};
@@ -1810,7 +1819,7 @@ frappe.ui.form.Form = class FrappeForm {
 						<a class="indicator ${get_color(doc || {})}"
 							href="/app/${frappe.router.slug(df.options)}/${escaped_name}"
 							data-doctype="${df.options}"
-							data-name="${value}">
+							data-name="${frappe.utils.escape_html(value)}">
 							${label}
 						</a>
 					`;
