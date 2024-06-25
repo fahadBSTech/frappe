@@ -35,6 +35,11 @@ export default class BulkOperations {
 			return;
 		}
 
+		if (valid_docs.length > 50) {
+			frappe.msgprint(__("You can only print upto 50 documents at a time"));
+			return;
+		}
+
 		const dialog = new frappe.ui.Dialog({
 			title: __("Print Documents"),
 			fields: [
@@ -235,7 +240,11 @@ export default class BulkOperations {
 	}
 
 	edit(docnames, field_mappings, done) {
-		let field_options = Object.keys(field_mappings).sort();
+		let field_options = Object.keys(field_mappings).sort(function (a, b) {
+			return __(cstr(field_mappings[a].label)).localeCompare(
+				cstr(__(field_mappings[b].label))
+			);
+		});
 		const status_regex = /status/i;
 
 		const default_field = field_options.find((value) => status_regex.test(value));

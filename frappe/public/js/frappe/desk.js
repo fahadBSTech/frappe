@@ -80,10 +80,9 @@ frappe.Application = class Application {
 			frappe.boot.onboarding_tours &&
 			frappe.boot.user.onboarding_status != null
 		) {
-			let pending_tours =
-				frappe.boot.onboarding_tours.findIndex((tour) => {
-					frappe.boot.user.onboarding_status[tour[0]]?.is_complete == true;
-				}) == -1;
+			let pending_tours = !frappe.boot.onboarding_tours.every(
+				(tour) => frappe.boot.user.onboarding_status[tour[0]]?.is_complete
+			);
 			if (pending_tours && frappe.boot.onboarding_tours.length > 0) {
 				frappe.require("onboarding_tours.bundle.js", () => {
 					frappe.utils.sleep(1000).then(() => {
@@ -490,7 +489,7 @@ frappe.Application = class Application {
 		$(document.activeElement).blur();
 		// wait for possible JS validations triggered after blur (it might change primary button)
 		setTimeout(() => {
-			if (window.cur_dialog && cur_dialog.display) {
+			if (window.cur_dialog && cur_dialog.display && !cur_dialog.is_minimized) {
 				// trigger primary
 				cur_dialog.get_primary_btn().trigger("click");
 			} else if (cur_frm && cur_frm.page.btn_primary.is(":visible")) {

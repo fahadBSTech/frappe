@@ -7,7 +7,7 @@ import json
 import re
 import time
 from collections import Counter
-from typing import Callable
+from collections.abc import Callable
 
 import sqlparse
 
@@ -44,7 +44,7 @@ def get_current_stack_frames():
 	try:
 		current = inspect.currentframe()
 		frames = inspect.getouterframes(current, context=10)
-		for frame, filename, lineno, function, context, index in list(reversed(frames))[:-2]:
+		for _frame, filename, lineno, function, _context, _index in list(reversed(frames))[:-2]:
 			if "/apps/" in filename or "<serverscript>" in filename:
 				yield {
 					"filename": TRACEBACK_PATH_PATTERN.sub("", filename),
@@ -71,7 +71,9 @@ def post_process():
 
 	for request in result:
 		for call in request["calls"]:
-			formatted_query = sqlparse.format(call["query"].strip(), keyword_case="upper", reindent=True)
+			formatted_query = sqlparse.format(
+				call["query"].strip(), keyword_case="upper", reindent=True, strip_comments=True
+			)
 			call["query"] = formatted_query
 
 			# Collect EXPLAIN for executed query
@@ -117,7 +119,10 @@ def normalize_query(query: str) -> str:
 		for token in q.flatten():
 			if "Token.Literal" in str(token.ttype):
 				token.value = "?"
-		return str(q)
+
+		# Transform IN parts like this: IN (?, ?, ?) -> IN (?)
+		q = re.sub(r"( IN )\(\?[\s\n\?\,]*\)", r"\1(?)", str(q), flags=re.IGNORECASE)
+		return q
 	except Exception as e:
 		print("Failed to normalize query ", e)
 
@@ -230,7 +235,7 @@ def start(*args, **kwargs):
 @administrator_only
 def stop(*args, **kwargs):
 	frappe.cache().delete_value(RECORDER_INTERCEPT_FLAG)
-	frappe.enqueue(post_process)
+	frappe.enqueue(post_process, now=frappe.flags.in_test)
 
 
 @frappe.whitelist()

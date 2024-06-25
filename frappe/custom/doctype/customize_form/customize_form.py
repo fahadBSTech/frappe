@@ -21,6 +21,7 @@ from frappe.custom.doctype.property_setter.property_setter import delete_propert
 from frappe.model import core_doctypes_list, no_value_fields
 from frappe.model.docfield import supports_translation
 from frappe.model.document import Document
+from frappe.model.meta import trim_table
 from frappe.utils import cint
 
 
@@ -274,9 +275,7 @@ class CustomizeForm(Document):
 			)
 			and (df.get(prop) == 0)
 		):
-			frappe.msgprint(
-				_("Row {0}: Not allowed to disable Mandatory for standard fields").format(df.idx)
-			)
+			frappe.msgprint(_("Row {0}: Not allowed to disable Mandatory for standard fields").format(df.idx))
 			return False
 
 		elif (
@@ -343,7 +342,9 @@ class CustomizeForm(Document):
 					original = frappe.get_doc(doctype, d.name)
 					for prop, prop_type in field_map.items():
 						if d.get(prop) != original.get(prop):
-							self.make_property_setter(prop, d.get(prop), prop_type, apply_on=doctype, row_name=d.name)
+							self.make_property_setter(
+								prop, d.get(prop), prop_type, apply_on=doctype, row_name=d.name
+							)
 					items.append(d.name)
 				else:
 					# custom - just insert/update
@@ -452,9 +453,7 @@ class CustomizeForm(Document):
 			if not is_standard_or_system_generated_field(df):
 				frappe.delete_doc("Custom Field", df.name)
 
-	def make_property_setter(
-		self, prop, value, property_type, fieldname=None, apply_on=None, row_name=None
-	):
+	def make_property_setter(self, prop, value, property_type, fieldname=None, apply_on=None, row_name=None):
 		delete_property_setter(self.doc_type, prop, fieldname, row_name)
 
 		property_value = self.get_existing_property_value(prop, fieldname)
@@ -523,13 +522,11 @@ class CustomizeForm(Document):
 			max_length = cint(frappe.db.type_map.get(df.fieldtype)[1])
 			fieldname = df.fieldname
 			docs = frappe.db.sql(
-				"""
+				f"""
 				SELECT name, {fieldname}, LENGTH({fieldname}) AS len
-				FROM `tab{doctype}`
+				FROM `tab{self.doc_type}`
 				WHERE LENGTH({fieldname}) > {max_length}
-			""".format(
-					fieldname=fieldname, doctype=self.doc_type, max_length=max_length
-				),
+			""",
 				as_dict=True,
 			)
 			links = []
@@ -557,6 +554,19 @@ class CustomizeForm(Document):
 		reset_customization(self.doc_type)
 		self.fetch_to_customize()
 
+	@frappe.whitelist()
+	def trim_table(self):
+		"""Removes database fields that don't exist in the doctype.
+
+		This may be needed as maintenance since removing a field in a DocType
+		doesn't automatically delete the db field.
+		"""
+		if not self.doc_type:
+			return
+
+		trim_table(self.doc_type, dry_run=False)
+		self.fetch_to_customize()
+
 	@classmethod
 	def allow_fieldtype_change(self, old_type: str, new_type: str) -> bool:
 		"""allow type change, if both old_type and new_type are in same field group.
@@ -567,6 +577,13 @@ class CustomizeForm(Document):
 			return (old_type in group) and (new_type in group)
 
 		return any(map(in_field_group, ALLOWED_FIELDTYPE_CHANGE))
+
+
+@frappe.whitelist()
+def get_orphaned_columns(doctype: str):
+	frappe.only_for("System Manager")
+	frappe.db.begin(read_only=True)  # Avoid any potential bug from writing to db
+	return trim_table(doctype, dry_run=True)
 
 
 def reset_customization(doctype):
@@ -704,7 +721,7 @@ ALLOWED_FIELDTYPE_CHANGE = (
 	("Text", "Data"),
 	("Text", "Text Editor", "Code", "Signature", "HTML Editor"),
 	("Data", "Select"),
-	("Text", "Small Text"),
+	("Text", "Small Text", "Long Text"),
 	("Text", "Data", "Barcode"),
 	("Code", "Geolocation"),
 	("Table", "Table MultiSelect"),
