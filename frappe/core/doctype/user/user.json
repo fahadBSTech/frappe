@@ -88,7 +88,8 @@
   "generate_keys",
   "column_break_65",
   "api_secret",
-  "onboarding_status"
+  "onboarding_status",
+  "slack_uid"
  ],
  "fields": [
   {
@@ -402,7 +403,8 @@
   },
   {
    "collapsible": 1,
-   "depends_on": "eval:in_list(['System User'], doc.user_type)",
+   "collapsible_depends_on": "eval:in_list(['System User', 'Administrator'], doc.user_type)",
+   "depends_on": "eval:in_list(['System User', 'Administrator'], doc.user_type)",
    "fieldname": "sb_allow_modules",
    "fieldtype": "Section Break",
    "label": "Allow Modules",
@@ -553,13 +555,15 @@
    "fieldname": "third_party_authentication",
    "fieldtype": "Section Break",
    "label": "Third Party Authentication",
-   "permlevel": 1
+   "permlevel": 1,
+   "read_only": 1
   },
   {
    "fieldname": "social_logins",
    "fieldtype": "Table",
    "label": "Social Logins",
-   "options": "User Social Login"
+   "options": "User Social Login",
+   "permlevel": 1
   },
   {
    "collapsible": 1,
@@ -615,7 +619,8 @@
    "fieldname": "module_profile",
    "fieldtype": "Link",
    "label": "Module Profile",
-   "options": "Module Profile"
+   "options": "Module Profile",
+   "permlevel": 1
   },
   {
    "description": "Stores the datetime when the last reset password key was generated.",
@@ -652,12 +657,12 @@
    "label": "Auto follow documents that you Like"
   },
   {
-    "default": "0",
-    "depends_on": "eval:(doc.document_follow_notify== 1)",
-    "fieldname": "follow_shared_documents",
-    "fieldtype": "Check",
-    "label": "Auto follow documents that are shared with you"
-   },
+   "default": "0",
+   "depends_on": "eval:(doc.document_follow_notify== 1)",
+   "fieldname": "follow_shared_documents",
+   "fieldtype": "Check",
+   "label": "Auto follow documents that are shared with you"
+  },
   {
    "default": "0",
    "depends_on": "eval:(doc.document_follow_notify== 1)",
@@ -671,6 +676,11 @@
    "fieldtype": "Small Text",
    "hidden": 1,
    "label": "Onboarding Status"
+  },
+  {
+   "fieldname": "slack_uid",
+   "fieldtype": "Data",
+   "label": "Slack User ID"
   }
  ],
  "icon": "fa fa-user",
