@@ -26,7 +26,6 @@ rights = (
 	"share",
 )
 
-
 GUEST_ROLE = "Guest"
 ALL_USER_ROLE = "All"  # This includes website users too.
 SYSTEM_USER_ROLE = "Desk User"

@@ -97,7 +97,8 @@
   "column_break_65",
   "api_secret",
   "onboarding_status",
-  "connections_tab"
+  "connections_tab",
+   "slack_uid"
  ],
  "fields": [
   {
@@ -410,7 +411,9 @@
    "permlevel": 1
   },
   {
-   "depends_on": "eval:in_list(['System User'], doc.user_type)",
+   "collapsible": 1,
+   "collapsible_depends_on": "eval:in_list(['System User', 'Administrator'], doc.user_type)",
+   "depends_on": "eval:in_list(['System User', 'Administrator'], doc.user_type)",
    "fieldname": "sb_allow_modules",
    "fieldtype": "Section Break",
    "label": "Allow Modules",
@@ -561,13 +564,15 @@
    "fieldname": "third_party_authentication",
    "fieldtype": "Section Break",
    "label": "Third Party Authentication",
-   "permlevel": 1
+   "permlevel": 1,
+   "read_only": 1
   },
   {
    "fieldname": "social_logins",
    "fieldtype": "Table",
    "label": "Social Logins",
-   "options": "User Social Login"
+   "options": "User Social Login",
+   "permlevel": 1
   },
   {
    "collapsible": 1,
@@ -623,7 +628,8 @@
    "fieldname": "module_profile",
    "fieldtype": "Link",
    "label": "Module Profile",
-   "options": "Module Profile"
+   "options": "Module Profile",
+   "permlevel": 1
   },
   {
    "description": "Stores the datetime when the last reset password key was generated.",
@@ -706,6 +712,11 @@
    "fieldtype": "Small Text",
    "hidden": 1,
    "label": "Onboarding Status"
+  },
+  {
+   "fieldname": "slack_uid",
+   "fieldtype": "Data",
+   "label": "Slack User ID"
   },
   {
    "description": "If left empty, the default workspace will be the last visited workspace",

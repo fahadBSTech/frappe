@@ -12,6 +12,7 @@ class UserProfile {
 		this.wrapper.bind("show", () => {
 			this.show();
 		});
+		this.allow_leaderboard = frappe.user.has_role(["System Manager", "Administrator"]);
 	}
 
 	show() {
@@ -31,7 +32,9 @@ class UserProfile {
 	make_user_profile() {
 		this.user = frappe.user_info(this.user_id);
 		this.page.set_title(this.user.fullname);
-		this.setup_user_search();
+		if (frappe.user.has_role(["System Manager", "Administrator"])) {
+			this.setup_user_search();
+		}
 		this.main_section.empty().append(frappe.render_template("user_profile"));
 		this.energy_points = 0;
 		this.review_points = 0;
