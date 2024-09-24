@@ -268,6 +268,10 @@ class BaseDocument:
 		if doc.get("parentfield"):
 			self.get(doc.parentfield).remove(doc)
 
+			# re-number idx
+			for i, _d in enumerate(self.get(doc.parentfield)):
+				_d.idx = i + 1
+
 	def _init_child(self, value, key):
 		if not isinstance(value, BaseDocument):
 			if not (doctype := self.get_table_field_doctype(key)):
@@ -777,7 +781,8 @@ class BaseDocument:
 					values = frappe.get_doc(doctype, docname).as_dict()
 
 				if values:
-					setattr(self, df.fieldname, values.name)
+					if not df.get("is_virtual"):
+						setattr(self, df.fieldname, values.name)
 
 					for _df in fields_to_fetch:
 						if self.is_new() or not self.docstatus.is_submitted() or _df.allow_on_submit:
