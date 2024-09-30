@@ -225,11 +225,12 @@ def set_notifications_as_unseen(user):
 		return
 
 @frappe.whitelist()
-def get_notifications_value(user):
+def get_notifications_value():
+	user = frappe.session.user
 	try:
 		notification_settings = frappe.db.get_value(
 			"Notification Settings",
-			{"user": user},
+			{"name": user},
 			["name", "seen"],
 			as_dict=True
 		)
