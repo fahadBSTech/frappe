@@ -8,7 +8,7 @@ from frappe.desk.doctype.notification_settings.notification_settings import (
 	is_notifications_enabled,
 )
 from frappe.model.document import Document
-
+from frappe.utils.send_push_notification import send_notification, get_user_fcm_token_by_email, get_doc_owner_name
 
 class NotificationLog(Document):
 	# begin: auto-generated types
@@ -34,6 +34,19 @@ class NotificationLog(Document):
 	def after_insert(self):
 		frappe.publish_realtime("notification", after_commit=True, user=self.for_user)
 		set_notifications_as_unseen(self.for_user)
+		fcm_token = get_user_fcm_token_by_email(self.for_user)
+		message = self.email_content
+		data = {
+			"document_name": self.document_name,
+			"document_type": self.document_type,
+			"for_user": self.for_user,
+			"from_user": self.owner
+		}
+		if self.owner != self.for_user:
+			name = get_doc_owner_name(self.owner)
+			message = f"{name} has {message[9:]}"
+		if fcm_token:
+			send_notification(fcm_token, self.subject, message, data)
 		if is_email_notifications_enabled_for_type(self.for_user, self.type):
 			try:
 				send_notification_email(self)
