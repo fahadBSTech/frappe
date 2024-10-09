@@ -753,6 +753,8 @@ def sendmail(
 	print_letterhead=False,
 	with_container=False,
 	email_read_tracker_url=None,
+	create_notification_log=False,
+	from_users=None,
 ) -> Optional["EmailQueue"]:
 	"""Send email using user's default **Email Account** or global default **Email Account**.
 
@@ -802,6 +804,35 @@ def sendmail(
 
 	if not delayed:
 		now = True
+
+	for_users = recipients
+	if create_notification_log and recipients:
+
+		# If from_users is empty, assign it to a list with 'doctype.owner'
+		if not from_users:
+			from_users = [doctype.owner]
+		for from_user in from_users:
+			if not from_user:
+				continue
+			if not isinstance(for_users, list):
+				for_users = [for_users]
+			for for_user in for_users:
+				notification_log= frappe.new_doc("Notification Log")
+				notification_log.update({
+					"from_user": from_user,
+					"for_user": for_user,
+					"owner": from_user,
+					"subject": subject,
+					"email_content": message,
+					"type": "Alert",
+					"document_type": reference_doctype,
+					"document_name": reference_name,
+					"attached_file": attachments
+				})
+				try: 
+					notification_log.insert(ignore_permissions=True)
+				except Exception as e:
+					print('Error while creating notification log', e)
 
 	from frappe.email.doctype.email_queue.email_queue import QueueBuilder
 
