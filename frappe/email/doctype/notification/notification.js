@@ -49,7 +49,7 @@ frappe.notification = {
 			frm.set_df_property("date_changed", "options", get_date_change_options());
 
 			let receiver_fields = [];
-			if (frm.doc.channel === "Email") {
+			if (frm.doc.channel === "Email" || frm.doc.channel === "System Notification") {
 				receiver_fields = $.map(fields, function (d) {
 					// Add User and Email fields from child into select dropdown
 					if (frappe.model.table_fields.includes(d.fieldtype)) {
