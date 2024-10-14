@@ -38,8 +38,7 @@ from frappe.query_builder import (
 )
 from frappe.utils.caching import request_cache
 from frappe.utils.data import cint, cstr, sbool
-from frappe.email.email_body import inline_style_in_html
-from frappe.email.doctype.email_template.email_template import get_email_template
+from email.email_body import inline_style_in_html
 
 # Local application imports
 from .exceptions import *
@@ -835,7 +834,7 @@ def sendmail(
 					"for_user": for_user,
 					"owner": from_user,
 					"subject": subject,
-					"email_content": message,
+					"email_content": inline_style_in_html(message),
 					"push_text": args.get('reminder_text') if args.get('reminder_text') else (content or message),
 					"type": "Alert",
 					"document_type": reference_doctype,
