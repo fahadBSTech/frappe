@@ -38,7 +38,6 @@ from frappe.query_builder import (
 )
 from frappe.utils.caching import request_cache
 from frappe.utils.data import cint, cstr, sbool
-from email.email_body import inline_style_in_html
 
 # Local application imports
 from .exceptions import *
@@ -829,6 +828,7 @@ def sendmail(
 				for_users = [for_users]
 			for for_user in for_users:
 				notification_log= frappe.new_doc("Notification Log")
+				from frappe.email.email_body import inline_style_in_html
 				notification_log.update({
 					"from_user": from_user,
 					"for_user": for_user,
