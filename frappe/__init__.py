@@ -812,7 +812,7 @@ def sendmail(
 		email_template = frappe.get_doc("Email Template", email_template_name)
 		subject = email_template.get_formatted_subject(args)
 		header = email_template.get_formatted_subject(args)
-		message = frappe.get_formatted_response(email_template.response_html, args)
+		message = email_template.get_formatted_response(email_template.response_html, args)
 		content = frappe.render_template(email_template.response, args) if email_template.response else None
 
 	for_users = recipients
