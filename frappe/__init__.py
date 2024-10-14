@@ -755,6 +755,7 @@ def sendmail(
 	email_read_tracker_url=None,
 	create_notification_log=False,
 	from_users=None,
+	email_template_name=None,
 ) -> Optional["EmailQueue"]:
 	"""Send email using user's default **Email Account** or global default **Email Account**.
 
@@ -782,6 +783,7 @@ def sendmail(
 	:param args: Arguments for rendering the template
 	:param header: Append header in email
 	:param with_container: Wraps email inside a styled container
+	:param email_template_name: Name of html template from db
 	"""
 
 	if recipients is None:
@@ -805,6 +807,14 @@ def sendmail(
 	if not delayed:
 		now = True
 
+	# if email template then use simple response as content for notification and message for email sending
+	if email_template_name:
+		email_template = frappe.get_doc("Email Template", email_template_name)
+		subject = email_template.get_formatted_subject(args)
+		header = email_template.get_formatted_subject(args)
+		message = email_template.get_formatted_response(args)
+		content = frappe.render_template(email_template.response, args) if email_template.response else None
+
 	for_users = recipients
 	if create_notification_log and recipients:
 
@@ -818,12 +828,14 @@ def sendmail(
 				for_users = [for_users]
 			for for_user in for_users:
 				notification_log= frappe.new_doc("Notification Log")
+				from frappe.email.email_body import inline_style_in_html
 				notification_log.update({
 					"from_user": from_user,
 					"for_user": for_user,
 					"owner": from_user,
 					"subject": subject,
-					"email_content": message,
+					"email_content": inline_style_in_html(message),
+					"push_text": args.get('reminder_text') if args.get('reminder_text') else (content or message),
 					"type": "Alert",
 					"document_type": reference_doctype,
 					"document_name": reference_name,
