@@ -835,8 +835,8 @@ def sendmail(
 					"for_user": for_user,
 					"owner": from_user,
 					"subject": subject,
-					"email_content": args.get('reminder_text') if args.get('reminder_text') else inline_style_in_html(
-						content or message),
+					"email_content": message,
+					"push_text": args.get('reminder_text') if args.get('reminder_text') else (content or message),
 					"type": "Alert",
 					"document_type": reference_doctype,
 					"document_name": reference_name,
