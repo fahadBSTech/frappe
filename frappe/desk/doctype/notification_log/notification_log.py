@@ -30,6 +30,7 @@ class NotificationLog(Document):
 		read: DF.Check
 		subject: DF.Text | None
 		type: DF.Literal["", "Mention", "Energy Point", "Assignment", "Share", "Alert"]
+
 	# end: auto-generated types
 	def after_insert(self):
 		frappe.publish_realtime("notification", after_commit=True, user=self.for_user)
@@ -193,6 +194,7 @@ def get_paginated_notification_logs(start=1, limit=20):
 
 	return {"notification_logs": notification_logs, "user_info": user_info}
 
+
 @frappe.whitelist()
 def mark_all_as_read():
 	unread_docs_list = frappe.get_all(
@@ -224,15 +226,13 @@ def set_notifications_as_unseen(user):
 	except frappe.DoesNotExistError:
 		return
 
+
 @frappe.whitelist()
 def get_notifications_value():
 	user = frappe.session.user
 	try:
 		notification_settings = frappe.db.get_value(
-			"Notification Settings",
-			{"name": user},
-			["name", "seen"],
-			as_dict=True
+			"Notification Settings", {"name": user}, ["name", "seen"], as_dict=True
 		)
 		return notification_settings
 	except frappe.DoesNotExistError:

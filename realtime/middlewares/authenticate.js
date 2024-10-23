@@ -13,8 +13,8 @@ function authenticate_with_frappe(socket, next) {
 		next(new Error("Invalid namespace"));
 	}
 
-	if (!socket.request.headers.origin){
-		socket.request.headers.origin = 'https://' + get_hostname(socket.request.headers.referer)
+	if (!socket.request.headers.origin) {
+		socket.request.headers.origin = "https://" + get_hostname(socket.request.headers.referer);
 	}
 
 	if (get_hostname(socket.request.headers.host) != get_hostname(socket.request.headers.origin)) {
@@ -83,4 +83,3 @@ function get_hostname(url) {
 }
 
 module.exports = authenticate_with_frappe;
-
