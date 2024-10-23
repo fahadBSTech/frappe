@@ -817,7 +817,6 @@ def sendmail(
 
 	for_users = recipients
 	if create_notification_log and recipients:
-
 		# If from_users is empty, assign it to a list with 'doctype.owner'
 		if not from_users:
 			from_users = [doctype.owner]
@@ -827,24 +826,29 @@ def sendmail(
 			if not isinstance(for_users, list):
 				for_users = [for_users]
 			for for_user in for_users:
-				notification_log= frappe.new_doc("Notification Log")
+				notification_log = frappe.new_doc("Notification Log")
 				from frappe.email.email_body import inline_style_in_html
-				notification_log.update({
-					"from_user": from_user,
-					"for_user": for_user,
-					"owner": from_user,
-					"subject": subject,
-					"email_content": inline_style_in_html(message),
-					"push_text": args.get('reminder_text') if args.get('reminder_text') else (content or message),
-					"type": "Alert",
-					"document_type": reference_doctype,
-					"document_name": reference_name,
-					"attached_file": attachments
-				})
-				try: 
+
+				notification_log.update(
+					{
+						"from_user": from_user,
+						"for_user": for_user,
+						"owner": from_user,
+						"subject": subject,
+						"email_content": inline_style_in_html(message),
+						"push_text": args.get("reminder_text")
+						if args.get("reminder_text")
+						else (content or message),
+						"type": "Alert",
+						"document_type": reference_doctype,
+						"document_name": reference_name,
+						"attached_file": attachments,
+					}
+				)
+				try:
 					notification_log.insert(ignore_permissions=True)
 				except Exception as e:
-					print('Error while creating notification log', e)
+					print("Error while creating notification log", e)
 
 	from frappe.email.doctype.email_queue.email_queue import QueueBuilder
 
