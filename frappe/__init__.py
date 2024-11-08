@@ -50,7 +50,7 @@ from .utils.jinja import (
 )
 from .utils.lazy_loader import lazy_import
 
-__version__ = "15.43.0"
+__version__ = "15.47.1"
 __title__ = "Frappe Framework"
 
 controllers = {}
@@ -327,12 +327,16 @@ def connect(site: str | None = None, db_name: str | None = None, set_admin_as_us
 	if site:
 		init(site)
 
+	assert db_name or local.conf.db_name, "site must be fully initialized, db_name missing"
+	assert local.conf.db_password, "site must be fully initialized, db_password missing"
+
 	local.db = get_db(
+		socket=local.conf.db_socket,
 		host=local.conf.db_host,
 		port=local.conf.db_port,
-		user=db_name or local.conf.db_name,
+		user=local.conf.db_name or db_name,
 		password=local.conf.db_password,
-		cur_db_name=db_name or local.conf.db_name,
+		cur_db_name=local.conf.db_name or db_name,
 	)
 	if set_admin_as_user:
 		set_user("Administrator")
@@ -353,6 +357,7 @@ def connect_replica() -> bool:
 		password = local.conf.replica_db_password
 
 	local.replica_db = get_db(
+		socket=None,
 		host=local.conf.replica_host,
 		port=port,
 		user=user,
@@ -405,6 +410,7 @@ def get_site_config(sites_path: str | None = None, site_path: str | None = None)
 		os.environ.get("FRAPPE_REDIS_CACHE") or config.get("redis_cache") or "redis://127.0.0.1:13311"
 	)
 	config["db_type"] = os.environ.get("FRAPPE_DB_TYPE") or config.get("db_type") or "mariadb"
+	config["db_socket"] = os.environ.get("FRAPPE_DB_SOCKET") or config.get("db_socket")
 	config["db_host"] = os.environ.get("FRAPPE_DB_HOST") or config.get("db_host") or "127.0.0.1"
 	config["db_port"] = (
 		os.environ.get("FRAPPE_DB_PORT") or config.get("db_port") or db_default_ports(config["db_type"])
