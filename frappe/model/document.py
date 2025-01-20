@@ -765,11 +765,15 @@ class Document(BaseDocument):
 	def get_permlevel_access(self, permission_type="write"):
 		allowed_permlevels = []
 		roles = frappe.get_roles()
-        # removes permlevel 1 access of direct reports
+    	# removes permlevel 1 access of direct reports
 		for perm in self.get_permissions():
 			if perm.role in roles and perm.get(permission_type) and perm.permlevel not in allowed_permlevels:
-				if perm.if_owner and frappe.session.user != self.get("user_id") and frappe.session.user != self.get("owner"):
-						continue
+				if (
+					perm.if_owner
+					and frappe.session.user != self.get("user_id")
+					and frappe.session.user != self.get("owner")
+				):
+					continue
 				allowed_permlevels.append(perm.permlevel)
 
 		return allowed_permlevels
