@@ -235,10 +235,10 @@ frappe.PermissionEngine = class PermissionEngine {
 
 			this.set_show_users(role_cell, d.role);
 
-			if (d.permlevel === 0) {
+			// if (d.permlevel === 0) {
 				// this.setup_user_permissions(d, role_cell);
 				this.setup_if_owner(d, role_cell);
-			}
+			// }
 
 			let cell = this.add_cell(row, d, "permlevel");
 
@@ -273,9 +273,9 @@ frappe.PermissionEngine = class PermissionEngine {
 
 	add_check(cell, d, fieldname, label, description = "") {
 		if (!label) label = toTitle(fieldname.replace(/_/g, " "));
-		if (d.permlevel > 0 && ["read", "write"].indexOf(fieldname) == -1) {
-			return;
-		}
+		// if (d.permlevel > 0 && ["read", "write"].indexOf(fieldname) == -1) {
+		// 	return;
+		// }
 
 		let checkbox = $(
 			`<div class='col-md-4'>
