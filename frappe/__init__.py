@@ -668,6 +668,7 @@ def get_request_header(key, default=None):
 
 def sendmail(
 	recipients=None,
+	for_users=None,
 	sender="",
 	subject="No Subject",
 	message="No Message",
@@ -766,7 +767,7 @@ def sendmail(
 		message = email_template.get_formatted_response(args)
 		content = frappe.render_template(email_template.response, args) if email_template.response else None
 
-	for_users = recipients
+	for_users = for_users if for_users else recipients
 	if create_notification_log and recipients:
 		# If from_users is empty, assign it to a list with 'doctype.owner'
 		if not from_users:
