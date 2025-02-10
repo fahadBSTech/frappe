@@ -34,9 +34,7 @@ class SystemSettings(Document):
 		country: DF.Link | None
 		currency: DF.Link | None
 		currency_precision: DF.Literal["", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
-		date_format: DF.Literal[
-			"yyyy-mm-dd", "dd-mm-yyyy", "dd/mm/yyyy", "dd.mm.yyyy", "mm/dd/yyyy", "mm-dd-yyyy"
-		]
+		date_format: DF.Literal["yyyy-mm-dd", "dd-mm-yyyy", "dd/mm/yyyy", "dd.mm.yyyy", "mm/dd/yyyy", "mm-dd-yyyy"]
 		default_app: DF.Literal[None]
 		deny_multiple_sessions: DF.Check
 		disable_change_log_notification: DF.Check
@@ -54,9 +52,7 @@ class SystemSettings(Document):
 		enable_telemetry: DF.Check
 		enable_two_factor_auth: DF.Check
 		encrypt_backup: DF.Check
-		first_day_of_the_week: DF.Literal[
-			"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
-		]
+		first_day_of_the_week: DF.Literal["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 		float_precision: DF.Literal["", "2", "3", "4", "5", "6", "7", "8", "9"]
 		force_user_to_reset_password: DF.Int
 		force_web_capture_mode_for_uploads: DF.Check
@@ -70,18 +66,7 @@ class SystemSettings(Document):
 		max_auto_email_report_per_user: DF.Int
 		max_file_size: DF.Int
 		minimum_password_score: DF.Literal["2", "3", "4"]
-		number_format: DF.Literal[
-			"#,###.##",
-			"#.###,##",
-			"# ###.##",
-			"# ###,##",
-			"#'###.##",
-			"#, ###.##",
-			"#,##,###.##",
-			"#,###.###",
-			"#.###",
-			"#,###",
-		]
+		number_format: DF.Literal["#,###.##", "#.###,##", "# ###.##", "# ###,##", "#'###.##", "#, ###.##", "#,##,###.##", "#,###.###", "#.###", "#,###"]
 		otp_issuer_name: DF.Data | None
 		password_reset_limit: DF.Int
 		rate_limit_email_link_login: DF.Int
@@ -90,6 +75,9 @@ class SystemSettings(Document):
 		rounding_method: DF.Literal["Banker's Rounding (legacy)", "Banker's Rounding", "Commercial Rounding"]
 		session_expiry: DF.Data | None
 		setup_complete: DF.Check
+		slack_api_url: DF.Data | None
+		slack_post_message_url: DF.Data | None
+		slack_token: DF.Data | None
 		store_attached_pdf_document: DF.Check
 		strip_exif_metadata_from_uploaded_images: DF.Check
 		time_format: DF.Literal["HH:mm:ss", "HH:mm"]

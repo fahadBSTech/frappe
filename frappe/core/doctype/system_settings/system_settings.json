@@ -29,6 +29,10 @@
   "apply_strict_user_permissions",
   "column_break_21",
   "allow_older_web_view_links",
+  "tokens_section",
+  "slack_token",
+  "slack_api_url",
+  "slack_post_message_url",
   "security_tab",
   "security",
   "session_expiry",
@@ -692,12 +696,32 @@
    "fieldtype": "Link",
    "label": "Currency",
    "options": "Currency"
+  },
+  {
+   "fieldname": "tokens_section",
+   "fieldtype": "Section Break",
+   "label": "Tokens"
+  },
+  {
+   "fieldname": "slack_token",
+   "fieldtype": "Data",
+   "label": "Slack Token"
+  },
+  {
+   "fieldname": "slack_api_url",
+   "fieldtype": "Data",
+   "label": "Slack API URL"
+  },
+  {
+   "fieldname": "slack_post_message_url",
+   "fieldtype": "Data",
+   "label": "Slack Post Message URL"
   }
  ],
  "icon": "fa fa-cog",
  "issingle": 1,
  "links": [],
- "modified": "2024-11-04 15:51:39.954876",
+ "modified": "2025-02-10 14:24:15.914793",
  "modified_by": "Administrator",
  "module": "Core",
  "name": "System Settings",
