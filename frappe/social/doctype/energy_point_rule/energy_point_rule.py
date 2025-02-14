@@ -7,6 +7,7 @@ from frappe import _
 from frappe.core.doctype.user.user import get_enabled_users
 from frappe.model import log_types
 from frappe.model.document import Document
+from frappe.utils import get_datetime
 from frappe.social.doctype.energy_point_log.energy_point_log import create_energy_points_log
 from frappe.social.doctype.energy_point_settings.energy_point_settings import (
 	is_energy_point_enabled,
@@ -106,7 +107,12 @@ class EnergyPointRule(Document):
 		return False
 
 	def eval_condition(self, doc):
-		return self.condition and frappe.safe_eval(self.condition, None, {"doc": doc.as_dict()})
+		context = {
+			"doc": doc.as_dict(),
+			"get_datetime": get_datetime
+		}
+		# Perform the condition evaluation
+		return self.condition and frappe.safe_eval(self.condition, None, context)
 
 
 def process_energy_points(doc, state):
